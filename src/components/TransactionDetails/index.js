@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
-import ReactGA from 'react-ga'
 import { useTranslation } from 'react-i18next'
 import styled, { css, keyframes } from 'styled-components'
 import { darken, lighten } from 'polished'
-import { isAddress, amountFormatter } from '../../utils'
+import { amountFormatter } from '../../utils'
 import { useDebounce } from '../../hooks'
 
 import question from '../../assets/images/question.svg'
@@ -17,6 +16,8 @@ const WARNING_TYPE = Object.freeze({
   riskyEntryHigh: 'riskyEntryHigh',
   riskyEntryLow: 'riskyEntryLow'
 })
+
+const b = text => <Bold>{text}</Bold>
 
 const Flex = styled.div`
   display: flex;
@@ -320,10 +321,6 @@ export default function TransactionDetails(props) {
       contextualInfo = t('selectTokenCont')
     } else if (!props.independentValue) {
       contextualInfo = t('enterValueCont')
-    } else if (props.sending && !props.recipientAddress) {
-      contextualInfo = t('noRecipient')
-    } else if (props.sending && !isAddress(props.recipientAddress)) {
-      contextualInfo = t('invalidRecipient')
     } else if (!props.account) {
       contextualInfo = t('noWallet')
       isError = true
@@ -341,13 +338,7 @@ export default function TransactionDetails(props) {
         closeDetailsText={t('hideDetails')}
         contextualInfo={contextualInfo ? contextualInfo : slippageWarningText}
         allowExpand={
-          !!(
-            props.inputCurrency &&
-            props.outputCurrency &&
-            props.inputValueParsed &&
-            props.outputValueParsed &&
-            (props.sending ? props.recipientAddress : true)
-          )
+          !!(props.inputCurrency && props.outputCurrency && props.inputValueParsed && props.outputValueParsed)
         }
         isError={isError}
         slippageWarning={props.slippageWarning && !contextualInfo}
@@ -480,10 +471,10 @@ export default function TransactionDetails(props) {
               }
             >
               {activeIndex === 4 && warningType.toString() === 'none' && 'Custom slippage value entered'}
-              {warningType === WARNING_TYPE.emptyInput && 'Enter a slippage percentage'}
-              {warningType === WARNING_TYPE.invalidEntryBound && 'Please select a value no greater than 50%'}
-              {warningType === WARNING_TYPE.riskyEntryHigh && 'Your transaction may be frontrun'}
-              {warningType === WARNING_TYPE.riskyEntryLow && 'Your transaction may fail'}
+              {warningType === WARNING_TYPE.emptyInput && 'Enter a slippage percentage.'}
+              {warningType === WARNING_TYPE.invalidEntryBound && 'Please select value less than 50%'}
+              {warningType === WARNING_TYPE.riskyEntryHigh && 'Your transaction may be frontrun.'}
+              {warningType === WARNING_TYPE.riskyEntryLow && 'Your transaction may fail.'}
             </BottomError>
           </SlippageRow>
         </SlippageSelector>
@@ -495,7 +486,7 @@ export default function TransactionDetails(props) {
     setActiveIndex(4)
     inputRef.current.focus()
     // if there's a value, evaluate the bounds
-    checkBounds(debouncedInput)
+    checkBounds(userInput)
   }
 
   // used for slippage presets
@@ -517,20 +508,20 @@ export default function TransactionDetails(props) {
     }
 
     // check bounds and set errors
-    if (Number(slippageValue) < 0 || Number(slippageValue) > 50) {
+    if (slippageValue < 0 || slippageValue > 50) {
       props.setcustomSlippageError('invalid')
       return setWarningType(WARNING_TYPE.invalidEntryBound)
     }
-    if (Number(slippageValue) >= 0 && Number(slippageValue) < 0.1) {
+    if (slippageValue >= 0 && slippageValue < 0.1) {
       props.setcustomSlippageError('valid')
       setWarningType(WARNING_TYPE.riskyEntryLow)
     }
-    if (Number(slippageValue) > 5) {
+    if (slippageValue > 5) {
       props.setcustomSlippageError('warning')
       setWarningType(WARNING_TYPE.riskyEntryHigh)
     }
     //update the actual slippage value in parent
-    updateSlippage(Number(slippageValue))
+    updateSlippage(slippageValue)
   }
 
   // check that the theyve entered number and correct decimal
@@ -547,54 +538,16 @@ export default function TransactionDetails(props) {
 
   const updateSlippage = newSlippage => {
     // round to 2 decimals to prevent ethers error
-    let numParsed = parseInt(newSlippage * 100)
+    let numParsed = parseFloat((newSlippage * 100).toFixed(2))
 
     // set both slippage values in parents
     props.setRawSlippage(numParsed)
     props.setRawTokenSlippage(numParsed)
   }
 
-  const b = text => <Bold>{text}</Bold>
-
   const renderTransactionDetails = () => {
-    ReactGA.event({
-      category: 'TransactionDetail',
-      action: 'Open'
-    })
-
     if (props.independentField === props.INPUT) {
-      return props.sending ? (
-        <TransactionInfo>
-          <div>
-            {t('youAreSelling')}{' '}
-            <ValueWrapper>
-              {b(
-                `${amountFormatter(
-                  props.independentValueParsed,
-                  props.independentDecimals,
-                  Math.min(4, props.independentDecimals)
-                )} ${props.inputSymbol}`
-              )}
-            </ValueWrapper>
-            .
-          </div>
-          <LastSummaryText>
-            {b(props.recipientAddress)} {t('willReceive')}{' '}
-            <ValueWrapper>
-              {b(
-                `${amountFormatter(
-                  props.dependentValueMinumum,
-                  props.dependentDecimals,
-                  Math.min(4, props.dependentDecimals)
-                )} ${props.outputSymbol}`
-              )}
-            </ValueWrapper>{' '}
-          </LastSummaryText>
-          <LastSummaryText>
-            {t('priceChange')} <ValueWrapper>{b(`${props.percentSlippageFormatted}%`)}</ValueWrapper>.
-          </LastSummaryText>
-        </TransactionInfo>
-      ) : (
+      return (
         <TransactionInfo>
           <div>
             {t('youAreSelling')}{' '}
@@ -607,7 +560,7 @@ export default function TransactionDetails(props) {
                 )} ${props.inputSymbol}`
               )}
             </ValueWrapper>{' '}
-            {t('forAtLeast')}
+            {t('forAtLeast')}{' '}
             <ValueWrapper>
               {b(
                 `${amountFormatter(
@@ -620,43 +573,12 @@ export default function TransactionDetails(props) {
             .
           </div>
           <LastSummaryText>
-            {t('priceChange')} <ValueWrapper>{b(`${props.percentSlippageFormatted}%`)}</ValueWrapper>.
+            {t('priceChange')} <ValueWrapper>{b(`${props.percentSlippageFormatted}%`)}</ValueWrapper>
           </LastSummaryText>
         </TransactionInfo>
       )
     } else {
-      return props.sending ? (
-        <TransactionInfo>
-          <div>
-            {t('youAreSending')}{' '}
-            <ValueWrapper>
-              {b(
-                `${amountFormatter(
-                  props.independentValueParsed,
-                  props.independentDecimals,
-                  Math.min(4, props.independentDecimals)
-                )} ${props.outputSymbol}`
-              )}
-            </ValueWrapper>{' '}
-            {t('to')} {b(props.recipientAddress)}.
-          </div>
-          <LastSummaryText>
-            {t('itWillCost')}{' '}
-            <ValueWrapper>
-              {b(
-                `${amountFormatter(
-                  props.dependentValueMaximum,
-                  props.dependentDecimals,
-                  Math.min(4, props.dependentDecimals)
-                )} ${props.inputSymbol}`
-              )}
-            </ValueWrapper>{' '}
-          </LastSummaryText>
-          <LastSummaryText>
-            {t('priceChange')} <ValueWrapper>{b(`${props.percentSlippageFormatted}%`)}</ValueWrapper>.
-          </LastSummaryText>
-        </TransactionInfo>
-      ) : (
+      return (
         <TransactionInfo>
           <div>
             {t('youAreBuying')}{' '}
@@ -682,9 +604,10 @@ export default function TransactionDetails(props) {
                 )} ${props.inputSymbol}`
               )}
             </ValueWrapper>{' '}
+            {t('orTransFail')}
           </LastSummaryText>
           <LastSummaryText>
-            {t('priceChange')} <ValueWrapper>{b(`${props.percentSlippageFormatted}%`)}</ValueWrapper>.
+            {t('priceChange')} <ValueWrapper>{b(`${props.percentSlippageFormatted}%`)}</ValueWrapper>
           </LastSummaryText>
         </TransactionInfo>
       )
